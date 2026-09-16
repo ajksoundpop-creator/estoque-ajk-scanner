@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  >
+
+  <meta name="theme-color" content="#111111">
+
+  <title>Scanner - Estoque AJK</title>
+
+  <script
+    src="https://unpkg.com/html5-qrcode"
+    type="text/javascript">
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      background: #111111;
+      color: #ffffff;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 15px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #ff7a00;
+      margin: 15px 0 8px;
+      font-size: 28px;
+    }
+
+    .subtitulo {
+      text-align: center;
+      color: #aaaaaa;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: #1c1c1c;
+      border: 1px solid #333333;
+      border-radius: 12px;
+      padding: 15px;
+    }
+
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 10px;
+      background: #000000;
+      margin-bottom: 15px;
+    }
+
+    .status {
+      text-align: center;
+      color: #aaaaaa;
+      font-size: 14px;
+      margin-bottom: 15px;
+      line-height: 1.5;
+    }
+
+    .codigo {
+      background: #111111;
+      border: 1px solid #333333;
+      border-radius: 8px;
+      padding: 15px;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
+    .codigo span {
+      display: block;
+      color: #aaaaaa;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .codigo strong {
+      color: #ff7a00;
+      font-size: 20px;
+      word-break: break-all;
+    }
+
+    button {
+      width: 100%;
+      min-height: 48px;
+      border: none;
+      border-radius: 8px;
+      background: #ff7a00;
+      color: #111111;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button.secundario {
+      background: #333333;
+      color: #ffffff;
+      margin-top: 10px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+    }
+
+    .erro {
+      background: #421919;
+      border: 1px solid #8f3333;
+      color: #ff9999;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 15px;
+      font-size: 14px;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .erro.visivel {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>ESTOQUE AJK</h1>
+
+    <div class="subtitulo">
+      Leitor de código de barras
+    </div>
+
+    <div class="card">
+
+      <div id="mensagemErro" class="erro"></div>
+
+      <div id="statusScanner" class="status">
+        Preparando câmera...
+      </div>
+
+      <div id="reader"></div>
+
+      <div class="codigo">
+        <span>Último código lido</span>
+        <strong id="codigoLido">---</strong>
+      </div>
+
+      <button
+        id="btnEnviar"
+        onclick="enviarCodigo()"
+        disabled
+      >
+        USAR CÓDIGO
+      </button>
+
+      <button
+        class="secundario"
+        onclick="voltar()"
+      >
+        VOLTAR
+      </button>
+
+    </div>
+
+  </div>
+
+  <script>
+
+    let scanner = null;
+
+    let codigoAtual = '';
+
+    let scannerAtivo = false;
+
+    let ultimoCodigo = '';
+
+    let ultimaLeitura = 0;
+
+
+    function mostrarErro(texto) {
+
+      const elemento =
+        document.getElementById(
+          'mensagemErro'
+        );
+
+      elemento.textContent = texto;
+
+      elemento.classList.add(
+        'visivel'
+      );
+
+    }
+
+
+    function limparErro() {
+
+      const elemento =
+        document.getElementById(
+          'mensagemErro'
+        );
+
+      elemento.textContent = '';
+
+      elemento.classList.remove(
+        'visivel'
+      );
+
+    }
+
+
+    function atualizarStatus(texto) {
+
+      document
+        .getElementById(
+          'statusScanner'
+        )
+        .textContent = texto;
+
+    }
+
+
+    function iniciarCamera() {
+
+      limparErro();
+
+      atualizarStatus(
+        'Solicitando acesso à câmera...'
+      );
+
+
+      if (
+        typeof Html5Qrcode ===
+        'undefined'
+      ) {
+
+        mostrarErro(
+          'Leitor não carregado. Verifique sua conexão com a internet.'
+        );
+
+        atualizarStatus(
+          'Leitor indisponível.'
+        );
+
+        return;
+
+      }
+
+
+      scanner =
+        new Html5Qrcode(
+          'reader'
+        );
+
+
+      const configuracao = {
+
+        fps: 10,
+
+        qrbox: function(
+          largura,
+          altura
+        ) {
+
+          const tamanho =
+            Math.floor(
+              Math.min(
+                largura,
+                altura
+              ) * 0.70
+            );
+
+          return {
+            width: tamanho,
+            height: Math.floor(
+              tamanho * 0.60
+            )
+          };
+
+        },
+
+        aspectRatio: 1.777778
+
+      };
+
+
+      scanner
+        .start(
+
+          {
+            facingMode:
+              'environment'
+          },
+
+          configuracao,
+
+          function(codigo) {
+
+            processarCodigo(
+              codigo
+            );
+
+          },
+
+          function() {}
+
+        )
+
+        .then(
+          function() {
+
+            scannerAtivo =
+              true;
+
+            atualizarStatus(
+              'Câmera ativa. Aponte para o código de barras.'
+            );
+
+          }
+        )
+
+        .catch(
+          function(erro) {
+
+            scannerAtivo =
+              false;
+
+            console.error(
+              erro
+            );
+
+            mostrarErro(
+              'Não foi possível iniciar a câmera. Verifique se esta página está sendo aberta em HTTPS e se a câmera está liberada para o site.'
+            );
+
+            atualizarStatus(
+              'Não foi possível iniciar a câmera.'
+            );
+
+          }
+        );
+
+    }
+
+
+    function processarCodigo(
+      codigo
+    ) {
+
+      const valor =
+        String(
+          codigo || ''
+        ).trim();
+
+
+      if (!valor) {
+        return;
+      }
+
+
+      const agora =
+        Date.now();
+
+
+      if (
+
+        valor ===
+          ultimoCodigo &&
+
+        agora -
+          ultimaLeitura <
+          1200
+
+      ) {
+
+        return;
+
+      }
+
+
+      ultimoCodigo =
+        valor;
+
+      ultimaLeitura =
+        agora;
+
+      codigoAtual =
+        valor;
+
+
+      document
+        .getElementById(
+          'codigoLido'
+        )
+        .textContent =
+        valor;
+
+
+      document
+        .getElementById(
+          'btnEnviar'
+        )
+        .disabled =
+        false;
+
+
+      atualizarStatus(
+        'Código encontrado. Confirme para usar.'
+      );
+
+    }
+
+
+    function enviarCodigo() {
+
+      if (!codigoAtual) {
+        return;
+      }
+
+
+      pararCamera();
+
+
+      const destino =
+        sessionStorage.getItem(
+          'AJK_SCANNER_ORIGEM'
+        );
+
+
+      if (
+        window.opener &&
+        !window.opener.closed
+      ) {
+
+        window.opener.postMessage(
+
+          {
+            tipo:
+              'AJK_CODIGO_SCANNER',
+
+            codigo:
+              codigoAtual,
+
+            origem:
+              destino || ''
+
+          },
+
+          '*'
+
+        );
+
+      }
+
+
+      setTimeout(
+        function() {
+
+          window.close();
+
+        },
+        300
+      );
+
+    }
+
+
+    function pararCamera() {
+
+      if (
+        scanner &&
+        scannerAtivo
+      ) {
+
+        scanner
+          .stop()
+          .then(
+            function() {
+
+              scannerAtivo =
+                false;
+
+            }
+          )
+          .catch(
+            function() {
+
+              scannerAtivo =
+                false;
+
+            }
+          );
+
+      }
+
+    }
+
+
+    function voltar() {
+
+      pararCamera();
+
+      window.close();
+
+    }
+
+
+    window.addEventListener(
+      'beforeunload',
+      function() {
+
+        pararCamera();
+
+      }
+    );
+
+
+    window.addEventListener(
+      'load',
+      function() {
+
+        const parametros =
+          new URLSearchParams(
+            window.location.search
+          );
+
+
+        const origem =
+          parametros.get(
+            'origem'
+          );
+
+
+        if (origem) {
+
+          sessionStorage.setItem(
+            'AJK_SCANNER_ORIGEM',
+            origem
+          );
+
+        }
+
+
+        iniciarCamera();
+
+      }
+    );
+
+  </script>
+
+</body>
+</html>
